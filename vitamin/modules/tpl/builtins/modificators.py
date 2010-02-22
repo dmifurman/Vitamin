@@ -5,10 +5,6 @@
 
 #This file is part of Vitamin Project
 
-try:
-    from ..templates import tokens as _tokens
-except ValueError:
-    import tokens as _tokens
 import random as _random
 
 def upper(string):
@@ -19,7 +15,7 @@ def crazy(string):
     _random.shuffle(lst)
     return "".join(lst)
 
-def pretty(string, lst = []):    
+def pretty(string, lst=[]):    
     lst = string.splitlines()
     lst = [x for x in lst if x.strip() != ""]
     return "\n".join(lst)

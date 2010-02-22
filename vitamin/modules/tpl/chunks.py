@@ -77,54 +77,39 @@ class TextChunk(Chunk):
         
 class ValueChunk(Chunk):
 
-    """Не является напрямую токеном, ведь его заголовки
+    """
+    Не является напрямую токеном, ведь его заголовки
     не описаны в синтаксисе шаблонной системы. Однако используется
     в рендеринге цепочек как объект, определяющий переменную или функцию.
-
-    Берет свое значение из контекста. Имеет в качестве полей имя переменной
-    и коллекцию имен аргументов.
-    
-    При рендеринге объект выбирается из контекста и определяется возмножность
-    использования его __call__ поля. Если такая возможность есть, то объект
-    вызывается, со своими аргументами, значения которых так- же получены
-    из контекста, с добавлением к ним аргумента arg, переданного в функцию 
-    render."""
+    """
 
     def __init__(self, value):
         Chunk.__init__(self)
         self.value = value
-        self.arguments = []
-        self.converted = None
         
-    def render(self, context, arg=None):
-    
-        if self.converted:
-            return self.value
-        else:
-            obj = context.getQuicker(self.value)
-            if hasattr(obj, "__call__"):
-                args = [x.render() for x in self.arguments]
-                args.append(arg)
-                return(obj(*args))
-            else:
-                return(obj)
+    def render(self, context):    
+        return str(context.get(self.value))
             
     def __repr__(self):
         return """<ValueChunk value={0} converted={1}>""".format(self.value,
                                                             self.converted)
+        
+class FunctionChunk(Chunk):
 
-class ParseError(Exception):
-    
-    def __init__(self, header, message):
-        self.header = header
-        self.message = message
-    
-    def __str__(self):
-        return """\nParseError in header:"{0}"\n{1}""".format(self.header,
-                                                            self.message)
-
-validNode = ["int", "float", "value"]
-validArg = validNode + ["string"]  
+    def __init__(self, function):
+        Chunk.__init__(self)
+        self.function = function
+        print(self.function.name)
+        
+    def render(self, context, arg=None):  
+        part = context.get(self.function)
+        if arg:
+            part.args = (arg,) + part.args
+        return part()
+            
+    def __repr__(self):
+        return """<FunctionChunk value={0} converted={1}>""".format(self.value,
+                                                            self.converted)
 
 class ChainChunk(Chunk):
 
@@ -147,20 +132,18 @@ class ChainChunk(Chunk):
     
 
 
-    def __init__(self, value, process_list):
+    def __init__(self, value, functions):
+        
         """Инициализация.
 
         ВНИМАНИЕ! Прежде чем разбираться в реализации ChainChunk
         прочтите описание ValueChunk.
 
-        Процедура инициализации этого токена связана с необходимостью
-        синтаксического разбора заголовка header. Регулярное выражение
-        разбивает заголовок на токены, которые, в свою очередь,
-        преобразуются в наборы ValueChunk        
         """
 
         Chunk.__init__(self)       
-        self.children.append(ValueChunk(value))
+        self.value = ValueChunk(value)
+        self.children += list(map(FunctionChunk, functions))
                
                             
     #@timer("Цепочка отрисована за")
@@ -168,9 +151,9 @@ class ChainChunk(Chunk):
         """Процедура отрисовки цепочки.
         После отрисовки всех звеньев на результат применяются
         модификаторы"""
-        result = None
-        for vChunk in self.children:
-            result = vChunk.render(context, result)      
+        result = self.value.render(context)
+        for function in self.children:
+            result = function.render(context, result)      
         aggregator.append(str(result))
 
 class LoopChunk(Chunk):

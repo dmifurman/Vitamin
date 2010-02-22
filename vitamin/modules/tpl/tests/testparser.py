@@ -1,6 +1,6 @@
 from unittest import TestCase
 from vitamin.modules.tpl.lexical import TemplateAnalyzer
-from vitamin.modules.tpl.chunk import TextChunk, ChainChunk, QualChunk, \
+from vitamin.modules.tpl.chunks import TextChunk, ChainChunk, QualChunk, \
     LoopChunk, BlockChunk, ModChunk, ExtendChunk
 
     

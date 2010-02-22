@@ -5,85 +5,70 @@
 
 #This file is part of Vitamin Project
 
-def convertFromStr(arg):
+from vitamin.modules.tpl.builtins import methods, modificators
+import operator
+from functools import partial
 
-    if arg.startswith("\""):
-        return arg[1:-1]
-            
-    try:
-        f = float(arg)
-        try:
-            return int(arg)
-        except ValueError:
-            return f
-    except ValueError:
-        return None
+builtins_methods = {x:getattr(methods, x) for x in dir(methods) if not x.startswith("_")}
+builtins_modificators = {x:getattr(modificators, x) for x in dir(modificators) if not x.startswith("_")}
 
+#переменаая, зависящая от контекста
+class ContextVar(str): 
+    
+    def __repr__(self):
+        return "ctx.var:" + self.__str__()
+        
+
+#функция, зависящая от контекста
+class ContextFunction():
+    
+    def __init__(self, name, *args, **kwargs):
+        
+        """
+        Переменные должны быть только следующих типов:
+            int, float, String, ContextVar, ContextFunction
+        """
+        
+        self.name = name
+        self.args = args
+        self.kwargs = kwargs
 
 class Context(dict):
-
-    def __init__(self, **kwargs):
-        self.update(kwargs)
-        self.methodsAvalible = (x for x in dir(methods) if not x.startswith("_"))
         
-    def getQuicker(self, name):
-        try:  
-            if "." in name: 
-                parameters = name.split(".")
-                anchor = self.values[parameters[0]]
+    def get(self, var):
+        
+        if isinstance(var, ContextVar):   
+                     
+            if "." in var:
+                name, *path = var.split(".")
+                getter = operator.attrgetter(path)
+                if name in self:
+                    getter(self[name])
+                else:
+                    raise Exception("context var failure: " + repr(name))
             else:
-                return self[name]
+                if var in self:
+                    return self[var]
+                else:
+                    raise Exception("context var failure: " + repr(var))
                 
-            for parameter in parameters[1:]:
-                anchor = getattr(anchor, parameter)
-            return anchor  
-        except KeyError:
-            if name in self.methodsAvalible:
-                return getattr(methods, name)
+        elif isinstance(var, ContextFunction):
+            
+            function = None
+            if var.name in self and hasattr(self[var.name], "__call__"):
+                function = self[var.name]
+            elif var.name in builtins_methods:
+                function = builtins_methods[var.name]
             else:
-                raise Exception("Contest miss {0}".format(name))                       
+                raise Exception("context function failure: " + repr(var.name))
+            
+            args = list(map(self.get, var.args))
+            return partial(function, *args)
         
-    def get(self, name): 
-        value = convertFromStr(name)
-        if value != None: return value    
-        return self.getQuicker(name)      
+        else:
+            return var
 
 class Aggregator(list):
-
-    def __init__(self):
-        self.modAvalible = (x for x in dir(modificators) if not x.startswith("_"))
-        self.modCache = {}
-        self.modLine = {}
-        self.modTemp = []
-
-    def pushMod(self, name, state):
-        if not name in self.modCache:    
-            self.modCache[name] = getattr(modificators, name)
-        if not name in self.modLine:
-            self.modLine[name] = []         
-        self.modLine[name].append(state)
-        self.modTemp.append([])
-
-    def decMod(self, name):
-        result = "".join(self.modTemp[-1])
-        if self.modLine[name][-1]:
-            result = self.modCache[name](result)
-        
-        del self.modTemp[-1]
-        self.append(result)
-        
-        del self.modLine[name][-1]
-        if len(self.modLine[name]) == 0:
-            del self.modLine[name]
-            
-    def append(self, item):
-        if self.modTemp:
-            self.modTemp[-1].append(item)
-        else:
-            list.append(self, item)
-            
-    def delete(self, index):
-        del self[index]
 
     def join(self):
         return "".join(self)

@@ -3,6 +3,8 @@ from helpers.vitaparse import exact, ntype, future, skip, maby, many, finish, \
     Ignore
 from vitamin.modules.tpl.chunks import ChainChunk, QualChunk, LoopChunk, \
     BlockChunk, TextChunk, ModChunk, ExtendChunk
+from vitamin.modules.tpl.context import ContextVar, ContextFunction
+from functools import partial
 
 #$Rev: 122 $     
 #$Author: fnight $  
@@ -39,6 +41,27 @@ SHORT_CLOSE = "]"
 LONG_OPEN = "{"
 LONG_CLOSE = "}"
 
+import operator as ops
+def select_opt(value):
+    
+    """
+    Преобразование операторов из строки в фукнцию
+    """
+    
+    if value == "in":
+        return ops.contains
+    elif value == ">":
+        return ops.gt
+    elif value == "<":
+        return ops.lt
+    elif value == "!=":
+        return ops.ne
+    elif value == "==":
+        return ops.eq     
+
+#строка вида 'str'
+class String(str): pass
+
 class TemplateAnalyzer():
     
     specs = [
@@ -47,7 +70,7 @@ class TemplateAnalyzer():
         Spec("end", "[/]\w+"),
         Spec("word", "\w[\w0-9_.]*"),
         Spec("integer", "[0-9]+"),
-        Spec("binary", "[<>|=]"),
+        Spec("binary", "[<>|=]|in"),
         Spec("special", "[[]]"),
         Spec("brace", "\(|\)"),
         Spec("comma", ","),
@@ -82,11 +105,11 @@ class TemplateAnalyzer():
         rstrict = exact("strict")
         rimplicit = exact("implicit")
         
-        word = ntype("word") >> (lambda t: t.value)
+        word = ntype("word") >> (lambda t: ContextVar(t.value))
         integer = ntype("integer") >> (lambda t: int(t.value))
-        binopt = ntype("binary") >> (lambda t: t.value)
-        special = ntype("special") >> (lambda t: t.value)
-        string = ntype("string") >> (lambda t: t.value[1:-1])
+        binopt = ntype("binary") >> (lambda t: select_opt(t.value))
+        #special = ntype("special") >> (lambda t: t.value)
+        string = ntype("string") >> (lambda t: String(t.value[1:-1]))
         twospot = skip(exact(":"))
       
         short_op = skip(exact(SHORT_OPEN))
@@ -111,7 +134,7 @@ class TemplateAnalyzer():
         arrow = skip(exact(">"))
         function = (word + 
                     skip(exact("(")) + 
-                    maby(word.join(exact(","))) + 
+                    maby(word.join(skip(exact(",")))) + 
                     skip(exact(")")))
         short_meat.define((word + many(arrow + function)) >> self._chain)
                 
@@ -153,10 +176,18 @@ class TemplateAnalyzer():
     #===========================================================================
     # chain
     #===========================================================================
-        
+    
     def _chain(self, values):
         value, *functions_n_args = values
-        return ChainChunk(value, functions_n_args)
+        functions = []
+        for func in functions_n_args:
+            if isinstance(functions_n_args, tuple):
+                name, *args = func
+            else:
+                name = func
+                args = []
+            functions.append(ContextFunction(name, *args))
+        return ChainChunk(value, functions)
     
     #===========================================================================
     # if chunk processor
