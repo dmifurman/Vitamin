@@ -68,7 +68,7 @@ class TemplateAnalyzer():
         Spec("space", "\s+"),
         Spec("comment", "[#]"),
         Spec("end", "[/]\w+"),
-        Spec("word", "\w[\w0-9_.]*"),
+        Spec("word", "[a-zA-Z][\w0-9_.]*"),
         Spec("integer", "[0-9]+"),
         Spec("binary", "[<>|=]|in"),
         Spec("special", "[[]]"),
@@ -110,6 +110,7 @@ class TemplateAnalyzer():
         binopt = ntype("binary") >> (lambda t: select_opt(t.value))
         #special = ntype("special") >> (lambda t: t.value)
         string = ntype("string") >> (lambda t: String(t.value[1:-1]))
+        number = integer
         twospot = skip(exact(":"))
       
         short_op = skip(exact(SHORT_OPEN))
@@ -132,23 +133,24 @@ class TemplateAnalyzer():
         
         #chain token
         arrow = skip(exact(">"))
-        function = (word + 
+        function = future()
+        function.define((word + 
                     skip(exact("(")) + 
-                    maby(word.join(skip(exact(",")))) + 
-                    skip(exact(")")))
+                    maby((number | string | word | function).join(skip(exact(",")))) + 
+                    skip(exact(")"))) >> self._function) 
         short_meat.define((word + many(arrow + function)) >> self._chain)
                 
         #if token
         endif = future()
         ifchunk = (long_op + (rif >> create_end(endif)) + 
-                   ((word + maby(binopt + word)) >> self.if_head) + 
+                   (((number | word) + maby(binopt + (number | word))) >> self.if_head) + 
                    long_cl + 
                    ((stuff + maby(long_op + relse + long_cl + stuff)) >> self.if_body) + 
                   endif) >> self._if
 
         endfor = future()
         forchunk = (long_op + (rfor >> create_end(endfor)) + 
-                    ((word + rin + (word | function)) >> self.for_head) + 
+                    ((word + rin + (function | word)) >> self.for_head) + 
                     long_cl + 
                     (stuff >> list) + 
                    endfor) >> self._for
@@ -158,7 +160,7 @@ class TemplateAnalyzer():
                             (stuff >> list) + endblock) >> self._block
                             
         endmod = future()
-        mod_chunk = (long_op + (word >> create_end(endmod, ignore=False)) + (exact("+") | exact("-")) + long_cl + 
+        mod_chunk = (long_op + (word >> create_end(endmod, ignore=False)) + ((exact("+") >> (lambda _: True)) | (exact("-") >> (lambda _: False))) + long_cl + 
                             (stuff >> list) + endmod) >> self._mod
                             
         comment = skip(long_op + exact("#") + string + long_cl)
@@ -177,16 +179,17 @@ class TemplateAnalyzer():
     # chain
     #===========================================================================
     
+    def _function(self, value):
+        if isinstance(value, tuple):
+            name, *args = value
+            args = args[0]
+        else:
+            name = value
+            args = []
+        return ContextFunction(name, *args)
+    
     def _chain(self, values):
-        value, *functions_n_args = values
-        functions = []
-        for func in functions_n_args:
-            if isinstance(functions_n_args, tuple):
-                name, *args = func
-            else:
-                name = func
-                args = []
-            functions.append(ContextFunction(name, *args))
+        value, *functions = values
         return ChainChunk(value, functions)
     
     #===========================================================================

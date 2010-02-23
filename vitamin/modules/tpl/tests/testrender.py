@@ -9,46 +9,47 @@ class RenderTest(TestCase):
     def setUp(self):
         self.load = TemplateAnalyzer().load
     
-    def test_text(self):        
-        text = """text me [name > upper()]"""
-        result = Template(text)
-        a = result.render(Context(name="Avatar"))
-        print(a)
+    def test_chain(self):       
+        text = """text me [name > lower()] [name > upper()] [name]"""
+        template = Template(text)
         
-#    def test_chain(self):        
-#        text = """[name > foo(arg1, arg2)]"""
-#        result = self.load(text)
-#        self.assertTrue(len(result) == 1)
-#        self.assertTrue(isinstance(result[0], ChainChunk))    
-#        
-#    def test_if(self):
-#        text = """{if name > 1} привет {else} пока {/if}"""
-#        result = self.load(text)
-#        self.assertTrue(len(result) == 1)
-#        self.assertTrue(isinstance(result[0], QualChunk))
-#        
-#    def test_for(self):
-#        text = """{for name in iter} пока {/for}"""
-#        result = self.load(text)
-#        self.assertTrue(len(result) == 1)
-#        self.assertTrue(isinstance(result[0], LoopChunk))
-#        
-#    def test_block(self):
-#        text = """{block: name} привет {/block}"""
-#        result = self.load(text)
-#        self.assertTrue(len(result) == 1)
-#        self.assertTrue(isinstance(result[0], BlockChunk))
-#        
-#    def test_mod(self):
-#        text = """{crazy+}{crazy-}при{/crazy}вет{/crazy}"""
-#        result = self.load(text)
-#        self.assertTrue(len(result) == 1)
-#        self.assertTrue(isinstance(result[0], ModChunk))
-#        
-#    def test_comment(self):
-#        text = """{#'Комментарий'}"""
-#        result = self.load(text)
-#        self.assertTrue(len(result) == 0)
+        a = template.render(Context(name="Avatar"))
+        self.assertEqual(a, "text me avatar AVATAR Avatar")
+         
+    def test_if(self):       
+        text = """{if angry < 5}привет{else}пока{/if}"""
+        template = Template(text)
+        
+        a = template.render(Context(angry=10))
+        self.assertEqual(a, "пока")
+        
+        a = template.render(Context(angry=3))
+        self.assertEqual(a, "привет")
+        
+    def test_for(self):
+        text = """{for value in range(10)}[value] {/for}"""
+        template = Template(text)
+        
+        a = template.render(Context(range=range))
+        self.assertEqual(list(map(int, a.split())), list(range(10)))
+        
+    def test_block(self):
+        text = """{block: name}привет{/block}"""
+        template = Template(text)
+        a = template.render()
+        self.assertEqual(a, "привет")
+
+    def test_mod(self):
+        text = """{crazy+}{crazy-}при{/crazy}вет{/crazy}"""
+        template = Template(text)
+        a = template.render()
+        print(a)
+     
+    def test_comment(self):
+        text = """{#'Комментарий'}"""
+        template = Template(text)
+        a = template.render()
+        self.assertEquals(a, "")
 #        
 #    def test_extend(self):
 #        text = """{#extend:base method:implicit}"""

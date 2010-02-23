@@ -1,3 +1,4 @@
+from vitamin.modules.tpl.context import ContextFunction
 
 #$Rev: 122 $     
 #$Author: fnight $  
@@ -15,6 +16,7 @@ render. Как правило, отрисовывая себя, токен от�
 Объект Context описан в соответствующем модуле."""
 
 import operator as ops
+from functools import partial
 
 class Chunk:
     """Основной класс для всех токенов. Определяет
@@ -92,24 +94,22 @@ class ValueChunk(Chunk):
             
     def __repr__(self):
         return """<ValueChunk value={0} converted={1}>""".format(self.value,
-                                                            self.converted)
+            self.converted)
         
 class FunctionChunk(Chunk):
 
     def __init__(self, function):
         Chunk.__init__(self)
         self.function = function
-        print(self.function.name)
         
     def render(self, context, arg=None):  
         part = context.get(self.function)
         if arg:
-            part.args = (arg,) + part.args
+            part = partial(part.func, *((arg,) + part.args))
         return part()
             
     def __repr__(self):
-        return """<FunctionChunk value={0} converted={1}>""".format(self.value,
-                                                            self.converted)
+        return """<FunctionChunk>"""
 
 class ChainChunk(Chunk):
 
@@ -128,9 +128,7 @@ class ChainChunk(Chunk):
     коды для экранирования символов.
     
     Фильтры могут иметь агрументы. Например:
-        [[now date("dd:mm:yyyy")]] выведет дату в соответствующем формате."""
-    
-
+        [[now date("dd:mm:yyyy")]] выведет дату в соответствующем формате."""   
 
     def __init__(self, value, functions):
         
@@ -140,11 +138,9 @@ class ChainChunk(Chunk):
         прочтите описание ValueChunk.
 
         """
-
         Chunk.__init__(self)       
         self.value = ValueChunk(value)
-        self.children += list(map(FunctionChunk, functions))
-               
+        self.children += list(map(FunctionChunk, functions))               
                             
     #@timer("Цепочка отрисована за")
     def render(self, context, aggregator):
@@ -184,15 +180,7 @@ class LoopChunk(Chunk):
         Chunk.__init__(self)
         self.iterator = head.iterator
         self.value = head.value
-        self.children = children
-
-        try:
-            number = int(self.iterator)
-            self.ranging = True
-            #все равно приходим к range
-            self.iterator = range(int(number))
-        except (ValueError, TypeError):
-            self.ranging = False
+        self.children = children        
     
     #@timer("Отрисовка цикла за")
     def render(self, context, aggregator):
@@ -200,16 +188,15 @@ class LoopChunk(Chunk):
         """Определяем конечный итератор и отрисовывем дочерние
         токены столько раз, сколько нужно, не забывая обновлять контекст.        
         """ 
-        if not self.ranging:           
-            iterator = context.get(self.iterator)
-        else: 
-            iterator = self.iterator
-        
-        result = []
 
+        if isinstance(self.iterator, ContextFunction):
+            iterator = FunctionChunk(self.iterator).render(context)
+        else:
+            iterator = context.get(self.iterator)
+        
         for value in iterator:
-             context[self.value] = value
-             self.renderChildren(context, aggregator, self.children)
+            context[str(self.value)] = value
+            self.renderChildren(context, aggregator, self.children)
              
         del context[self.value]        
 
@@ -220,10 +207,6 @@ class QualChunk(Chunk):
         {{if x [in|>|<|==|>=|<= y]}}, где x и y могут быть как 
     переменными, зависимыми от контекста, так и числами. Y можно 
     опустить по аналогии с условным оператором в Python"""
-
-    def isIn(self, a: object, b: iter):
-        """Представление опрератора in"""
-        return a in b
 
     def __init__(self, head, body):   
         
@@ -239,24 +222,14 @@ class QualChunk(Chunk):
             
         Chunk.__init__(self)
         self.invert = False
-        self.value1 = head.left
-        self.value2 = head.right
+        self.value_left = head.left
+        self.value_right = head.right
         self.operator = head.operator
         self.trueChunks = body.true_children
         self.falseChunks = body.false_children
 
         #выбор операторов. В качетстве функций
         #используются build-in модуль operators
-        if self.operator == "in":
-            self.operation = self.isIn
-        elif self.operator == ">":
-            self.operation = ops.gt
-        elif self.operator == "<":
-            self.operation = ops.lt
-        elif self.operator == "!=":
-            self.operation = ops.ne
-        elif self.operator == "==":
-            self.operation = ops.eq    
 
     def render(self, context, aggregator): 
         """
@@ -276,14 +249,14 @@ class QualChunk(Chunk):
         оператору if в Python.
         """
         
-        if not self.value1: return  
+        assert self.value_left
                 
-        value1Obj = context.get(self.value1)
-        if not self.value2:                            
-            result = True if value1Obj else False
+        ctx_value_left = context.get(self.value_left)
+        if not self.value_right:                            
+            result = bool(ctx_value_left)
         else:   
-            value2Obj = context.get(self.value2)
-            result = self.operation(value1Obj, value2Obj)  
+            ctx_value_right = context.get(self.value_right)
+            result = self.operator(ctx_value_left, ctx_value_right)  
             
         if self.invert: result = not result
         toRender = self.trueChunks if result else self.falseChunks
@@ -303,7 +276,7 @@ class BlockChunk(Chunk):
     def __init__(self, name, children):
         Chunk.__init__(self)
         self.name = name
-        self.children
+        self.children = children
            
     def render(self, context, aggregator):
         return self.renderChildren(context, aggregator, self.children)
@@ -328,13 +301,12 @@ class ModChunk(Chunk):
         Chunk.__init__(self)
         self.name = name
         self.children = children
-        self.state = True if state == "+" else False
+        self.state = state
            
     def render(self, context, aggregator):
-        aggregator.pushMod(self.name, self.state)
+        aggregator.push_modificator(self.name, self.state)
         self.renderChildren(context, aggregator, self.children)
-        aggregator.decMod(self.name)  
- 
+        aggregator.del_modificator(self.name) 
         
 class ExtendChunk(Chunk):
     """Токен, определяющий маршрут системы наследования.
