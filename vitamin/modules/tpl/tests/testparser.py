@@ -33,6 +33,12 @@ class ParseTest(TestCase):
         self.assertTrue(len(result) == 1)
         self.assertTrue(isinstance(result[0], LoopChunk))
         
+    def test_for_many_val(self):
+        text = """{for name, value in iter} пока {/for}"""
+        result = self.load(text)
+        self.assertTrue(len(result) == 1)
+        self.assertTrue(isinstance(result[0], LoopChunk))
+        
     def test_block(self):
         text = """{block: name} привет {/block}"""
         result = self.load(text)

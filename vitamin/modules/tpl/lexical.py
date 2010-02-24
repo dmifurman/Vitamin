@@ -97,7 +97,6 @@ class TemplateAnalyzer():
         rfor = (exact("for"))
         rif = (exact("if"))
         relse = skip(exact("else"))
-        rend = skip(ntype("end"))
         rin = skip(exact("in"))
         rblock = (exact("block"))
         rextend = skip(exact("extend"))
@@ -108,7 +107,6 @@ class TemplateAnalyzer():
         word = ntype("word") >> (lambda t: ContextVar(t.value))
         integer = ntype("integer") >> (lambda t: int(t.value))
         binopt = ntype("binary") >> (lambda t: select_opt(t.value))
-        #special = ntype("special") >> (lambda t: t.value)
         string = ntype("string") >> (lambda t: String(t.value[1:-1]))
         number = integer
         twospot = skip(exact(":"))
@@ -127,8 +125,14 @@ class TemplateAnalyzer():
         def create_end(node, ignore=True):
             def _foo(token):
                 val = getattr(token, "value", token)
-                node.define(long_op + skip(exact("/" + val)) + long_cl)
+                node.define_with_revert(long_op + skip(exact("/" + val)) + long_cl)
                 return Ignore() if ignore else token
+            return _foo
+        
+        def revert(node, ignore=True):          
+            def _foo(token):
+                node.revert()
+                return Ignore() if ignore else token            
             return _foo
         
         #chain token
@@ -150,7 +154,7 @@ class TemplateAnalyzer():
 
         endfor = future()
         forchunk = (long_op + (rfor >> create_end(endfor)) + 
-                    ((word + rin + (function | word)) >> self.for_head) + 
+                    ((word.join(skip(exact(","))) + rin + (function | word)) >> self.for_head) + 
                     long_cl + 
                     (stuff >> list) + 
                    endfor) >> self._for
@@ -160,8 +164,10 @@ class TemplateAnalyzer():
                             (stuff >> list) + endblock) >> self._block
                             
         endmod = future()
-        mod_chunk = (long_op + (word >> create_end(endmod, ignore=False)) + ((exact("+") >> (lambda _: True)) | (exact("-") >> (lambda _: False))) + long_cl + 
-                            (stuff >> list) + endmod) >> self._mod
+        mod_chunk = (long_op + 
+            (word >> create_end(endmod, ignore=False)) + 
+            ((exact("+") >> (lambda _: True)) | (exact("-") >> (lambda _: False))) + 
+            long_cl + (stuff >> list) + (endmod >> revert(endmod))) >> self._mod
                             
         comment = skip(long_op + exact("#") + string + long_cl)
         
@@ -233,7 +239,7 @@ class TemplateAnalyzer():
     
     class for_head():
         def __init__(self, values):
-            self.value = values[0]
+            self.values = values[0]
             self.iterator = values[1]
             
     #===========================================================================

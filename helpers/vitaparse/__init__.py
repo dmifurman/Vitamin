@@ -49,6 +49,13 @@ class Node():
     def __init__(self, function, name="default"): 
         self.name = name
         self._assign(function)
+        self.reversion = []
+        
+    def revert(self):
+        if self.reversion:
+            del self.reversion[-1]
+        if self.reversion:
+            self._assign(self.reversion.pop())
         
     def _assign(self, function):
         """
@@ -71,6 +78,10 @@ class Node():
         assert node
         self._assign(node)
         return self
+    
+    def define_with_revert(self, node):
+        self.reversion.append(node)     
+        self.define(node)        
         
     def withGo(self, func):
         self.__go = func
@@ -174,7 +185,10 @@ class Node():
             "Some problem occured while parsing line {0} near >>'{1}'".format(
                     e.token.line + 1, e.token.value))
     
-class Ignore(): pass
+class Ignore():
+    
+    def __init__(self, token=None):
+        self.value = getattr(token, "value", token) if token else ""
     
 class State():
     
@@ -293,7 +307,7 @@ def skip(node):
     которых не нужно передавать в функцию- обработчик парсера.
     """
     assert node
-    return (node >> (lambda _: Ignore())).withName("skip")
+    return (node >> (lambda t: Ignore(t))).withName("skip")
 
 #Node creators
 

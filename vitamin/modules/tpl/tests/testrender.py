@@ -33,6 +33,20 @@ class RenderTest(TestCase):
         a = template.render(Context(range=range))
         self.assertEqual(list(map(int, a.split())), list(range(10)))
         
+    def test_for_many_val(self):
+        text = """{for var1, var2 in test}[var1]+[var2] {/for}"""
+        template = Template(text)
+        
+        a = template.render(Context(test=((1, 2), (2, 3))))
+        self.assertEqual(a.strip(), "1+2 2+3")
+        
+#    def test_for_iter(self):
+#        text = """{for value in names}[value] {/for}"""
+#        template = Template(text)
+#        
+#        a = template.render(Context(names=("Стас", "Вася")))
+#        print(a)
+        
     def test_block(self):
         text = """{block: name}привет{/block}"""
         template = Template(text)
@@ -40,10 +54,15 @@ class RenderTest(TestCase):
         self.assertEqual(a, "привет")
 
     def test_mod(self):
-        text = """{crazy+}{crazy-}при{/crazy}вет{/crazy}"""
+        text = """
+        {crazy+}перемешанный{crazy-} нормальный {upper+}большой_нормальный{/upper} {/crazy}перемешанный{/crazy}"""
         template = Template(text)
         a = template.render()
-        print(a)
+        arr = a.split()
+        self.assertNotEqual(arr[0], "перемешанный")
+        self.assertEqual(arr[1], "нормальный")
+        self.assertEqual(arr[2], "большой_нормальный".upper())
+        self.assertNotEqual(arr[3], "перемешанный")
      
     def test_comment(self):
         text = """{#'Комментарий'}"""

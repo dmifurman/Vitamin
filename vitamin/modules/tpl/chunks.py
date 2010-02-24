@@ -179,7 +179,7 @@ class LoopChunk(Chunk):
     def __init__(self, head, children) -> None:
         Chunk.__init__(self)
         self.iterator = head.iterator
-        self.value = head.value
+        self.values = head.values
         self.children = children        
     
     #@timer("Отрисовка цикла за")
@@ -194,11 +194,15 @@ class LoopChunk(Chunk):
         else:
             iterator = context.get(self.iterator)
         
-        for value in iterator:
-            context[str(self.value)] = value
+        for values in iterator:
+            if len(self.values) == 1:
+                context[str(self.values[0])] = values
+            elif len(values) == len(self.values):
+                for name, value in zip(self.values, values):
+                    context[str(name)] = value
+            else: raise Exception("to many values to unpack")
             self.renderChildren(context, aggregator, self.children)
-             
-        del context[self.value]        
+              
 
 class QualChunk(Chunk):
 
