@@ -1,3 +1,4 @@
+from vitamin.modules.tpl.chunks import BlockChunk, ExtendChunk
 
 #$Rev: 117 $     
 #$Author: fnight $  
@@ -31,28 +32,28 @@ web-framework'a Django. Механизм наследования заключа
 Нет необходимости самостоятельно запускать наследование вслучае их 
 использования"""
 
-try:
-    from ..templates import tokens
-except ValueError:
-    import tokens
-
-class Mutagen:
+class Mutagen():
 
     def treeToDict(self, tokenList):
-        """Разворачивает иерархическую структуру токенов в списке 
+        
+        """
+        Разворачивает иерархическую структуру токенов в списке 
         tokenList в словарь блоков. Ключами становлятся имена блоков, 
-        а значениями - сами объекты блоков"""
+        а значениями - сами объекты блоков
+        """
         
         lst = {x.name:x for x in tokenList \
-                if type(x) == tokens.BlockToken}
+                if type(x) == BlockChunk}
                 
         for token in tokenList:
             if token.children:
                 lst.update(self.treeToDict(token.children))
         return lst
               
-    def mutateBlock(self, baseBlocksDict: dict, block: tokens.BlockToken) -> bool:
-        """Заменяет содержимое блока из baseBlocksDict, имя которого совпадает
+    def mutateBlock(self, baseBlocksDict, block) -> bool:
+        
+        """
+        Заменяет содержимое блока из baseBlocksDict, имя которого совпадает
         с block.name на содержимое блока block
         
         baseBlocksDict - словарь, сгенерированый функцией treeToDict или аналогом
@@ -61,7 +62,8 @@ class Mutagen:
         
         Функция вернет True, если блоки с одинаковым названием найдены и 
         замена содержимого произведена, или False, если блок с названием 
-        block.name не найден в споваре baseBlocksDict"""
+        block.name не найден в споваре baseBlocksDict
+        """
         
         try:
             baseBlock = baseBlocksDict[block.name]      
@@ -72,7 +74,9 @@ class Mutagen:
       
            
     def mutate(self, loader, template):
-        """Основная функция, производящая наследование шаблона.
+        
+        """
+        Основная функция, производящая наследование шаблона.
         Именно её необходимо использовать для инициализации рекурсивного
         механизма наследования. Функция принимает два аргумента:
         
@@ -84,19 +88,21 @@ class Mutagen:
         template - экземпляр класса Template, который будет унаследован
         от базового шаблона, имя которого определено директивой extend.
         Если директива extend в шаблоне не обнаружена, то функция вернет 
-        данный аргумент."""
-        #есть ли extend?
+        данный аргумент.
+        """
+
         try:
-            extendBlock = [token for token in template.tokens 
-                                if type(token) == tokens.ExtendToken][0]
+            extendBlock = [token for token in template.chunks 
+                if type(token) == ExtendChunk][0]
         except IndexError:
             return template
         
-        baseTemplate = loader(extendBlock.name)
+        print("extending:", extendBlock.name)
+        baseTemplate = loader.load(extendBlock.name)
         baseTemplate = self.mutate(loader, baseTemplate)    
-        blocksDict = self.treeToDict(baseTemplate.tokens)
-        candidates = [token for token in template.tokens 
-                if type(token) == tokens.BlockToken and token.name in blocksDict]                
+        blocksDict = self.treeToDict(baseTemplate.chunks)
+        candidates = [token for token in template.chunks 
+                if type(token) == BlockChunk and token.name in blocksDict]                
         [self.mutateBlock(blocksDict, x) for x in candidates]
         
         return baseTemplate

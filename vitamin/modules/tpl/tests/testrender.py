@@ -40,13 +40,6 @@ class RenderTest(TestCase):
         a = template.render(Context(test=((1, 2), (2, 3))))
         self.assertEqual(a.strip(), "1+2 2+3")
         
-#    def test_for_iter(self):
-#        text = """{for value in names}[value] {/for}"""
-#        template = Template(text)
-#        
-#        a = template.render(Context(names=("Стас", "Вася")))
-#        print(a)
-        
     def test_block(self):
         text = """{block: name}привет{/block}"""
         template = Template(text)

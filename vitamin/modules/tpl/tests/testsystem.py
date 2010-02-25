@@ -14,9 +14,13 @@ class TestSystem(TestCase, Tweak("Templates")):
         self.tweak()        
         self.test_folder = os.path.dirname(
             self.TEMPLATE_TESTS_PACKAGE.__file__)
+        self.system = Templates(self.test_folder)
         
-    def test_init(self):
-        system = Templates(self.test_folder)
-        template = system.load("test1")
+    def test_init(self):        
+        template = self.system.load("test1")
         print(template.info())
+        
+    def test_extend(self):
+        template = self.system.load("test_extend_child")
+        print(template.render())
         

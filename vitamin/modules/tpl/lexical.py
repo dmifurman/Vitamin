@@ -12,23 +12,11 @@ from functools import partial
 
 #This file is part of Vitamin Project
 
-"""Модуль для грамматического разбора текста и поска в нем т.н. токенов - 
+"""
+Модуль для грамматического разбора текста и поска в нем т.н. токенов - 
 логических элементов. Все токены определяются заголовками, имеющими
-строго определенный правилами синтаксис. Сами правила (экземпляры класса
-Rule) можно добавлять в анализатор для расширения функциональности 
-системы шаблонов. Так- же можно изменить существующий набор правил.
-
-ВНИМАНИЕ! Если вы решите изменить существующий наблор правил, обратите внимание, 
-что системе обязательно наличие правла для токена с типом "end" для определения
-закрывающего токена для токенов, требующих закрытия. Если вы решите удалить 
-данное правило, то вам придется полностью отказаться и от правил, описывающих
-токены, которые нужно закрывать. Помните об этом.
-
-Правила изменяются в конструкторе класса Snoop. Для осуществления разбора
-класс определяет функцию analyse, однако нет необходимости напрямую создавать
-и использовать класс Snoop. Функция analyse поставляется на уровне модуля
-и желательно использовать именно её."""
-
+строго определенный правилами синтаксис.
+"""
 
 LONG = "long"
 SHORT = "short"
@@ -42,8 +30,8 @@ LONG_OPEN = "{"
 LONG_CLOSE = "}"
 
 import operator as ops
-def select_opt(value):
-    
+def select_opt(value): 
+       
     """
     Преобразование операторов из строки в фукнцию
     """
@@ -59,11 +47,21 @@ def select_opt(value):
     elif value == "==":
         return ops.eq     
 
-#строка вида 'str'
 class String(str): pass
 
 class TemplateAnalyzer():
     
+    """
+    Основной лексический анализатор шаблонной системы.
+    Выполняет все операции по анализу текста шаблона и создания
+    структуры Chunk'ов на основе этого текста. Анализ исходных
+    текстов шаблона происходит при помощи комбинаторных парсеров,
+    описанных в модуле vitaparse. 
+    
+    См. док.
+    """
+    
+    #спецификации для токенизатора
     specs = [
         Spec("space", "\s+"),
         Spec("comment", "[#]"),
@@ -78,49 +76,32 @@ class TemplateAnalyzer():
         Spec("string", "'.*?'"),
         Spec("plus", "[+-]")]
     
+    #анализ только данных блоков текста
     delimeters = [
         BlockSpec(LONG, LONG_OPEN, LONG_CLOSE, specs),
         BlockSpec(SHORT, SHORT_OPEN, SHORT_CLOSE, specs)]
     
+    #игнорируемые символы
+    #TODO: добавить перевод строки??
     unused = ("space")
     
     def tokenize(self, text):
+        
+        """
+        Токенизация исходного кода шаблона при помощи указанных
+        выше спецификаций. При спецификации используется блочный токенизатор - 
+        специальный токенизатор, обрабатывающий токены только внутри указанных
+        блоков, все остальное считая токеном типа EXTERNAL.
+        """
         
         tokenizer = BlockTokenizer(self.delimeters, EXTERNAL)
         return [x for x in tokenizer(text) if not x.type in self.unused]
     
     def parse(self, tokens):
         
-        text = ntype(EXTERNAL) >> (lambda t: TextChunk(t.value))
-        
-        #reserved words
-        rfor = (exact("for"))
-        rif = (exact("if"))
-        relse = skip(exact("else"))
-        rin = skip(exact("in"))
-        rblock = (exact("block"))
-        rextend = skip(exact("extend"))
-        rmethod = skip(exact("method"))
-        rstrict = exact("strict")
-        rimplicit = exact("implicit")
-        
-        word = ntype("word") >> (lambda t: ContextVar(t.value))
-        integer = ntype("integer") >> (lambda t: int(t.value))
-        binopt = ntype("binary") >> (lambda t: select_opt(t.value))
-        string = ntype("string") >> (lambda t: String(t.value[1:-1]))
-        number = integer
-        twospot = skip(exact(":"))
-      
-        short_op = skip(exact(SHORT_OPEN))
-        short_cl = skip(exact(SHORT_CLOSE))
-        
-        long_op = skip(exact(LONG_OPEN))
-        long_cl = skip(exact(LONG_CLOSE))
-        
-        short_meat = future()
-        
-        short_block = short_op + short_meat + short_cl
-        stuff = future()
+        #=======================================================================
+        # helpers
+        #=======================================================================
         
         def create_end(node, ignore=True):
             def _foo(token):
@@ -135,46 +116,120 @@ class TemplateAnalyzer():
                 return Ignore() if ignore else token            
             return _foo
         
-        #chain token
-        arrow = skip(exact(">"))
+        text = ntype(EXTERNAL) >> (lambda t: TextChunk(t.value))
+        
+        #=======================================================================
+        # reserved words
+        #=======================================================================
+        rfor = exact("for")
+        rif = exact("if")
+        relse = skip(exact("else"))
+        rin = skip(exact("in"))
+        rblock = (exact("block"))
+        rextend = skip(exact("extend"))
+        rmethod = skip(exact("method"))
+        rstrict = exact("strict") >> (lambda t: t.value)
+        rimplicit = exact("implicit") >> (lambda t: t.value)
+        
+        #=======================================================================
+        # small items
+        #=======================================================================
+        word = ntype("word") >> (lambda t: ContextVar(t.value))
+        integer = ntype("integer") >> (lambda t: int(t.value))
+        binopt = ntype("binary") >> (lambda t: select_opt(t.value))
+        string = ntype("string") >> (lambda t: String(t.value[1:-1]))
+        number = integer
+        twospot = skip(exact(":"))
+      
+        #=======================================================================
+        # границы блоков
+        #=======================================================================
+        
+        short_op = skip(exact(SHORT_OPEN))
+        short_cl = skip(exact(SHORT_CLOSE))
+        
+        long_op = skip(exact(LONG_OPEN))
+        long_cl = skip(exact(LONG_CLOSE))
+        
+        stuff = future()
+        
+        #=======================================================================
+        # chain chunk
+        #=======================================================================
+        
+        short_meat = future()        
+        short_block = short_op + short_meat + short_cl
+        
+        #=======================================================================
+        # function
+        #=======================================================================
         function = future()
         function.define((word + 
-                    skip(exact("(")) + 
-                    maby((number | string | word | function).join(skip(exact(",")))) + 
-                    skip(exact(")"))) >> self._function) 
-        short_meat.define((word + many(arrow + function)) >> self._chain)
+            skip(exact("(")) + 
+            maby((number | string | word | function).join(skip(exact(",")))) + 
+            skip(exact(")"))) >> self.__function)      
+                       
+        #=======================================================================
+        # chain chunk  
+        #=======================================================================
+        arrow = skip(exact(">"))
+        short_meat.define((word + many(arrow + function)) >> self.__chain)
                 
-        #if token
+        #=======================================================================
+        # if chunk
+        #=======================================================================
         endif = future()
         ifchunk = (long_op + (rif >> create_end(endif)) + 
-                   (((number | word) + maby(binopt + (number | word))) >> self.if_head) + 
-                   long_cl + 
-                   ((stuff + maby(long_op + relse + long_cl + stuff)) >> self.if_body) + 
-                  endif) >> self._if
+            (((number | word) + maby(binopt + (number | word))) >> self.__if_head) + 
+            long_cl + 
+            ((stuff + maby(long_op + relse + long_cl + stuff)) >> self.__if_body) + 
+            endif) >> self.__if
 
+        #=======================================================================
+        # for chunk
+        #=======================================================================
         endfor = future()
         forchunk = (long_op + (rfor >> create_end(endfor)) + 
-                    ((word.join(skip(exact(","))) + rin + (function | word)) >> self.for_head) + 
-                    long_cl + 
-                    (stuff >> list) + 
-                   endfor) >> self._for
+            ((word.join(skip(exact(","))) + rin + (function | word)) >> self.__for_head) + 
+            long_cl + 
+            (stuff >> list) + 
+            endfor) >> self.__for
         
+        #=======================================================================
+        # block chunk
+        #=======================================================================
         endblock = future()
-        block_chunk = (long_op + (rblock >> create_end(endblock)) + twospot + word + long_cl + 
-                            (stuff >> list) + endblock) >> self._block
-                            
+        block_chunk = (long_op + 
+            (rblock >> create_end(endblock)) + twospot + word + long_cl + 
+            (stuff >> list) + endblock) >> self.__block
+              
+        #=======================================================================
+        # mod chunk
+        #=======================================================================
         endmod = future()
         mod_chunk = (long_op + 
             (word >> create_end(endmod, ignore=False)) + 
             ((exact("+") >> (lambda _: True)) | (exact("-") >> (lambda _: False))) + 
-            long_cl + (stuff >> list) + (endmod >> revert(endmod))) >> self._mod
-                            
+            long_cl + (stuff >> list) + (endmod >> revert(endmod))) >> self.__mod
+                 
+        #=======================================================================
+        # comment
+        #=======================================================================
         comment = skip(long_op + exact("#") + string + long_cl)
         
+        #=======================================================================
+        # extend chunk
+        #=======================================================================
         extend = (long_op + skip(exact("#")) + rextend + twospot + word + 
-         maby(rmethod + twospot + (rstrict | rimplicit)) + long_cl) >> self._extend
+            maby(rmethod + twospot + (rstrict | rimplicit)) + long_cl) >> self.__extend
         
-        stuff.define(many(text | short_block | ifchunk | forchunk | block_chunk | mod_chunk | comment | extend))
+        #=======================================================================
+        # разный стафф
+        #=======================================================================
+        stuff.define(many(
+            text | short_block | ifchunk | 
+            forchunk | block_chunk | mod_chunk | 
+            comment | extend))           
         
         return [x for x in (stuff + finish()).parse(tokens)[0] if not isinstance(x, Ignore)]
     
@@ -182,10 +237,15 @@ class TemplateAnalyzer():
         return self.parse(self.tokenize(text))
     
     #===========================================================================
+    # дальше идут обработчики, которые непосредственно помогают в анализе токенов
+    # ниче интересного ;-)
+    #===========================================================================
+
+    #===========================================================================
     # chain
     #===========================================================================
     
-    def _function(self, value):
+    def __function(self, value):
         if isinstance(value, tuple):
             name, *args = value
             args = args[0]
@@ -194,14 +254,14 @@ class TemplateAnalyzer():
             args = []
         return ContextFunction(name, *args)
     
-    def _chain(self, values):
+    def __chain(self, values):
         value, *functions = values
         return ChainChunk(value, functions)
     
     #===========================================================================
     # if chunk processor
     #===========================================================================
-    class if_head():        
+    class __if_head():        
         def __init__(self, values):
             self.left = values[0]
             if len(values) == 2:
@@ -211,7 +271,7 @@ class TemplateAnalyzer():
                 self.right = None
                 self.operator = None
             
-    class if_body():
+    class __if_body():
         def __init__(self, values):
             self.true_children = values[0]
             if len(values) == 2:
@@ -219,25 +279,25 @@ class TemplateAnalyzer():
             else:
                 self.false_children = []
     
-    def _if(self, values):
+    def __if(self, values):
         head = values[0]
-        assert isinstance(head, self.if_head)
+        assert isinstance(head, self.__if_head)
         body = values[1]
-        assert isinstance(body, self.if_body)
+        assert isinstance(body, self.__if_body)
         return QualChunk(head, body)
     
     #===========================================================================
     # for chunk processor
     #===========================================================================
     
-    def _for(self, values):
+    def __for(self, values):
         head = values[0]
-        assert isinstance(head, self.for_head)
+        assert isinstance(head, self.__for_head)
         children = values[1]
         assert isinstance(children, list)
         return LoopChunk(head, children)
     
-    class for_head():
+    class __for_head():
         def __init__(self, values):
             self.values = values[0]
             self.iterator = values[1]
@@ -246,10 +306,10 @@ class TemplateAnalyzer():
     # other chunk processor
     #===========================================================================
             
-    def _block(self, values):
+    def __block(self, values):
         return BlockChunk(values[0], values[1])
     
-    def _mod(self, values):
+    def __mod(self, values):
         name, state = values[0]
         if len(values) == 2:
             children = values[1]
@@ -257,11 +317,13 @@ class TemplateAnalyzer():
             children = None
         return ModChunk(name, state, children)
     
-    def _extend(self, values):
-        name = values[0]
-        if len(values) == 2:
-            method = values[1]
+    def __extend(self, values):
+        method = "strict"
+        if isinstance(values, str):
+            name = values
         else:
-            method = "strict"
+            name = values[0]
+            if len(values) == 2:
+                method = values[1]
         return ExtendChunk(name, method)
         

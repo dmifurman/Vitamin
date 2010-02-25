@@ -57,7 +57,16 @@ class ParseTest(TestCase):
         self.assertTrue(len(result) == 0)
         
     def test_extend(self):
-        text = """{#extend:base method:implicit}"""
+        text = """{#extend:test_extend_base method:implicit}"""
         result = self.load(text)
         self.assertTrue(len(result) == 1)
         self.assertTrue(isinstance(result[0], ExtendChunk))
+        self.assertEqual(result[0].name, "test_extend_base")
+        self.assertEqual(result[0].method.strip(), "implicit")
+        
+        text = """{#extend:test_extend_base}"""
+        result = self.load(text)
+        self.assertTrue(len(result) == 1)
+        self.assertTrue(isinstance(result[0], ExtendChunk))
+        self.assertEqual(result[0].name, "test_extend_base")
+        self.assertEqual(result[0].method.strip(), "strict")
