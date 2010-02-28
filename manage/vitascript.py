@@ -1,23 +1,12 @@
 #!/usr/bin/python3
 
-import os
-import sys
-
-sys.path.append("../")
-sys.path.append(".")
-
-from manage.iscript import IScript
-
-WORKDIR = "."
-SCRIPTS = os.path.join(WORKDIR, "scripts")
-assert WORKDIR
-assert os.path.exists(SCRIPTS)
-
 class ScriptsResolver():
 
     def __init__(self):
+        
         self.scripts = {}
         self.collect_scripts()
+        
         print("{0} scripts found: {1}".format(
             len(self.scripts),
             ",".join(self.scripts)))
@@ -25,12 +14,14 @@ class ScriptsResolver():
         if len(sys.argv) > 1:
             script = sys.argv[1]
             if script.lower() in self.scripts:
-                self.scripts[script].run()
+                s = self.scripts[script]()
+                s._set_folders(WORKDIR, CURRENT)
+                s.run()
             else:
-                print("Script '{0}' not found :'-(".format(script))               
+                print("Script '{0}' not found ^-(O_O)-^".format(script))            
 
-    
     def collect_scripts(self):
+        
         files = [x for x in os.listdir(SCRIPTS) if
             os.path.splitext(x)[1] == ".py" and
             not x.startswith("_")]
@@ -42,14 +33,29 @@ class ScriptsResolver():
         for m in modules:
             imp = __import__(m, fromlist=[1])
             try:
-                script = [value for name, value in imp.__dict__.items() 
-                          if not name.startswith("_")
-                          and issubclass(value, IScript)][0]
+                script = imp.__dict__[m.split(".")[-1]]
+                assert issubclass(script, IScript)
                 self.scripts[m.split(".")[-1].lower()] = script
             except KeyError:
                 print("bad %s file" % m)            
 
 if __name__ == "__main__":
+    
+    import os
+    import sys   
+
+    WORKDIR = os.path.dirname(os.readlink(__file__))
+    CURRENT = os.getcwd()
+    SCRIPTS = os.path.join(WORKDIR, "scripts")
+    
+    sys.path.append(WORKDIR)
+    sys.path.append(os.path.dirname(WORKDIR))
+    
+    from iscript import IScript    
+
+    assert WORKDIR
+    assert os.path.exists(SCRIPTS)
+    
     resolver = ScriptsResolver()
     
     

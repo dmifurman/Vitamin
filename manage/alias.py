@@ -7,7 +7,8 @@ FILE = sys.argv[0]
 if not FILE:
     sys.exit()
 
-VITAMIN_SCRIPT = os.path.join(os.path.dirname(FILE), "vitamin.py")
+import vitascript
+VITAMIN_SCRIPT = vitascript.__file__
 
 SHELL = os.environ["SHELL"]
 HOME = os.environ["HOME"]
@@ -23,7 +24,7 @@ if __name__ == "__main__":
         if os.path.exists("/usr/bin/vitamin"):
             os.remove("/usr/bin/vitamin")
             print("Old link has been removed..")
-        os.popen("ln {0} /usr/bin/vitamin".format(repr(VITAMIN_SCRIPT)))
+        os.popen("ln {0} /usr/bin/vitamin --symbolic".format(repr(VITAMIN_SCRIPT)))
         print("Executable access...")
         os.popen("chmod +x " + repr(VITAMIN_SCRIPT))
         print("All done!")

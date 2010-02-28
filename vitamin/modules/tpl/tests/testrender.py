@@ -62,6 +62,17 @@ class RenderTest(TestCase):
         template = Template(text)
         a = template.render()
         self.assertEquals(a, "")
+        
+    def test_strange_cycle_behaviour(self):
+        text = """
+        {for x in range(10)}
+            {if x > 1} [x] {else} x {/if}
+        {/for}
+        """
+        template = Template(text)
+        a = template.render(Context(range=range))
+        self.assertEqual(a.strip().split(),
+            ['x', 'x', '2', '3', '4', '5', '6', '7', '8', '9'])
 #        
 #    def test_extend(self):
 #        text = """{#extend:base method:implicit}"""

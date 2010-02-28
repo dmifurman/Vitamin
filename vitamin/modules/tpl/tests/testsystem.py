@@ -2,7 +2,6 @@ from unittest import TestCase
 from vitamin.modules.tpl import Templates
 from vitamin.config import Tweak, Parameter
 
-from vitamin.config import config
 import os
 
 class TestSystem(TestCase, Tweak("Templates")):
